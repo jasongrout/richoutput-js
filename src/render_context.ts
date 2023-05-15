@@ -3,9 +3,7 @@ import { IContext, IComms, JsonType, IComm } from './typings';
 import { UUID } from '@lumino/coreutils';
 
 export class RenderContext {
-  constructor(
-    private readonly commHost?: ICommHost
-  ) {}
+  constructor(private readonly commHost?: ICommHost) {}
 
   get comms(): IComms | undefined {
     if (!this.commHost) {
@@ -22,7 +20,7 @@ export class RenderContext {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const context = this;
     return {
-      comms: context.comms
+      comms: context.comms,
     };
   }
 }
