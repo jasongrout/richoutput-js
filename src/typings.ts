@@ -12,7 +12,6 @@ export interface IRender {
 }
 
 export declare interface IContext {
-  getModelState(modelId: string): Promise<Map<string, IModelState>>;
   readonly comms?: IComms;
 }
 

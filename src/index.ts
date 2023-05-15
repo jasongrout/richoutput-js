@@ -1,24 +1,23 @@
-import { IRenderMime } from '@jupyterlab/rendermime-interfaces';
 import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin,
 } from '@jupyterlab/application';
-import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
-import { INotebookModel, INotebookTracker } from '@jupyterlab/notebook';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
+import { INotebookModel, INotebookTracker } from '@jupyterlab/notebook';
+import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
+import { IRenderMime } from '@jupyterlab/rendermime-interfaces';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
 import { JSONObject } from '@lumino/coreutils';
 
 import { Widget } from '@lumino/widgets';
-import { IRender } from './typings';
-import { RenderContext } from './render_context';
-import { WidgetModels, IWidgetCommData } from './widgets';
 import {
   CommCloseListener,
-  ICommHost,
   CommMessageListener,
+  ICommHost,
   IMessage,
 } from './comm';
+import { RenderContext } from './render_context';
+import { IRender } from './typings';
 
 /**
  * The default mime type for the extension.
@@ -71,11 +70,11 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
   readonly safe = false;
   readonly mimeTypes = [MIME_TYPE];
   private kernel: Kernel.IKernelConnection;
-  private widgets = new WidgetModels();
   private readonly commMessageListeners = new Map<
     string,
     CommMessageListener[]
   >();
+
   private readonly commCloseListeners = new Map<string, CommCloseListener[]>();
   private readonly commOpenListeners = new Map<string, CommOpenListener[]>();
 
@@ -212,13 +211,9 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
     newValue: Kernel.IKernelConnection
   ): void {
     this.kernel = newValue;
-    this.widgets = new WidgetModels();
 
     this.kernel.iopubMessage.connect((sender, args) => {
       this.handleIoPubMessage(args);
-    });
-    this.kernel.registerCommTarget('jupyter.widget', (comm: Kernel.IComm) => {
-      // Need to have a default handler or else the kernel will crash.
     });
     console.log('===== kernel is now: ', this.kernel);
   }
@@ -244,8 +239,8 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
   onCommOpen(msg: KernelMessage.IIOPubMessage) {
     const content = msg.content as ICommOpenContent;
     const buffers = msg.buffers.map(convertBuffer);
-    this.widgets.onCommOpen(content.comm_id, content.data, buffers);
     const listeners = this.commOpenListeners.get(content.target_name);
+
     if (listeners) {
       for (const listener of listeners) {
         listener(content.comm_id, {
@@ -259,7 +254,7 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
   onCommMessage(msg: KernelMessage.IIOPubMessage) {
     const content = msg.content as ICommContent;
     const buffers = msg.buffers.map(convertBuffer);
-    this.widgets.onCommMessage(content.comm_id, content.data, buffers);
+
     const listeners = this.commMessageListeners.get(content.comm_id);
     if (listeners) {
       for (const listener of listeners) {
@@ -273,7 +268,6 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
 
   onCommClose(msg: KernelMessage.IIOPubMessage) {
     const content = msg.content as ICommContent;
-    this.widgets.onCommClose(content.comm_id);
     const listeners = this.commCloseListeners.get(content.comm_id);
     if (listeners) {
       for (const listener of listeners) {
@@ -283,7 +277,7 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
   }
 
   createRenderer(options: IRenderMime.IRendererOptions): IRenderMime.IRenderer {
-    return new OutputWidget(options, this.widgets, this);
+    return new OutputWidget(options, this);
   }
 }
 
@@ -310,13 +304,13 @@ function convertBuffer(
 
 declare interface ICommContent {
   readonly comm_id: string;
-  readonly data: IWidgetCommData;
+  readonly data: JSONObject;
 }
 
 declare interface ICommOpenContent {
   readonly target_name: string;
   readonly comm_id: string;
-  readonly data: IWidgetCommData;
+  readonly data: JSONObject;
 }
 
 /**
@@ -328,7 +322,6 @@ export class OutputWidget extends Widget implements IRenderMime.IRenderer {
    */
   constructor(
     options: IRenderMime.IRendererOptions,
-    private readonly widgets: WidgetModels,
     private readonly commHost?: ICommHost
   ) {
     super();
@@ -345,7 +338,7 @@ export class OutputWidget extends Widget implements IRenderMime.IRenderer {
     console.log(model.data);
     console.log(`Rendering ${data}`);
     const module: IRender = await import(/* webpackIgnore: true */ data);
-    const context = new RenderContext(this.widgets, this.commHost);
+    const context = new RenderContext(this.commHost);
     const div = document.createElement('div');
     this.node.appendChild(div);
     await module?.render(
@@ -357,37 +350,5 @@ export class OutputWidget extends Widget implements IRenderMime.IRenderer {
 
   private _mimeType: string;
 }
-
-/**
- * A mime renderer factory for ES6 Rich Output data.
- */
-// export const rendererFactory: IRenderMime.IRendererFactory = {
-//   safe: true,
-//   mimeTypes: [MIME_TYPE],
-//   createRenderer: (options) => new OutputWidget(options),
-// };
-
-/**
- * Extension definition.
- */
-// const extension: IRenderMime.IExtension = {
-//   id: 'richoutput-js:plugin',
-//   rendererFactory,
-//   rank: 100,
-//   dataType: 'string',
-//   fileTypes: [
-//     {
-//       name: 'ES6 Rich Output',
-//       mimeTypes: [MIME_TYPE],
-//       extensions: ['.es6richoutput'],
-//     },
-//   ],
-//   documentWidgetFactoryOptions: {
-//     name: 'ES6 Rich Output',
-//     primaryFileType: 'ES6 Rich Output',
-//     fileTypes: ['ES6 Rich Output'],
-//     defaultFor: ['ES6 Rich Output'],
-//   },
-// };
 
 export default extension;

@@ -1,30 +1,11 @@
 import { CommChannel, ICommHost, IMessage } from './comm';
-import { IContext, IModelState, IComms, JsonType, IComm } from './typings';
-import { WidgetModels } from './widgets';
+import { IContext, IComms, JsonType, IComm } from './typings';
 import { UUID } from '@lumino/coreutils';
 
 export class RenderContext {
   constructor(
-    private readonly models: WidgetModels,
     private readonly commHost?: ICommHost
   ) {}
-  async getModelState(modelId: string): Promise<Map<string, IModelState>> {
-    const result = new Map<string, IModelState>();
-    for (const [id, model] of this.models.getModelAndAllReferencing(modelId)) {
-      let comm;
-      if (this.commHost) {
-        comm = new CommChannel(id, this.commHost).getWrapper();
-      }
-      result.set(id, {
-        modelModule: model.modelModule,
-        modelName: model.modelName,
-        modelModuleVersion: model.modelModuleVersion,
-        state: model.getState(),
-        comm,
-      });
-    }
-    return result;
-  }
 
   get comms(): IComms | undefined {
     if (!this.commHost) {
@@ -41,12 +22,7 @@ export class RenderContext {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const context = this;
     return {
-      getModelState: (modelId: string) => {
-        return this.getModelState(modelId);
-      },
-      get comms(): IComms | undefined {
-        return context.comms;
-      },
+      comms: context.comms
     };
   }
 }
