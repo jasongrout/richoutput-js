@@ -14,8 +14,8 @@ import {
   CommCloseListener,
   CommMessageListener,
   ICommHost,
-  IMessage,
-} from './comm';
+  ICommMessage,
+} from './typings';
 import { RenderContext } from './render_context';
 import { IRender } from './typings';
 
@@ -64,7 +64,7 @@ const extension: JupyterFrontEndPlugin<void> = {
   },
 };
 
-type CommOpenListener = (commId: string, message: IMessage) => void;
+type CommOpenListener = (commId: string, message: ICommMessage) => void;
 
 class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
   readonly safe = false;
@@ -103,7 +103,7 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
     }
   }
 
-  addMessageListener(commId: string, handler: (message: IMessage) => void) {
+  addMessageListener(commId: string, handler: (message: ICommMessage) => void) {
     let listeners = this.commMessageListeners.get(commId);
     if (!listeners) {
       listeners = [];
@@ -133,7 +133,7 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
 
   registerTarget(
     targetName: string,
-    handler: (commId: string, message: IMessage) => void
+    handler: (commId: string, message: ICommMessage) => void
   ) {
     this.kernel.registerCommTarget(targetName, () => {
       // Callback isn't used, this uses the IOPub messages instead.
@@ -153,7 +153,7 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
   async sendCommOpen(
     targetName: string,
     commId: string,
-    message: IMessage
+    message: ICommMessage
   ): Promise<void> {
     const msg = KernelMessage.createMessage<
       KernelMessage.ICommOpenMsg<'shell'>
@@ -173,7 +173,7 @@ class RendererFactory implements IRenderMime.IRendererFactory, ICommHost {
     await this.kernel.sendShellMessage(msg).done;
   }
 
-  async sendCommMessage(commId: string, message: IMessage): Promise<void> {
+  async sendCommMessage(commId: string, message: ICommMessage): Promise<void> {
     const msg = KernelMessage.createMessage<KernelMessage.ICommMsgMsg<'shell'>>(
       {
         msgType: 'comm_msg',

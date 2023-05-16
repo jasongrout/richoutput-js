@@ -1,5 +1,5 @@
-import { CommChannel, ICommHost, IMessage } from './comm';
-import { IContext, IComms, JsonType, IComm } from './typings';
+import { CommChannel } from './comm';
+import { IContext, IComms, JsonType, IComm, ICommMessage, ICommHost } from './typings';
 import { UUID } from '@lumino/coreutils';
 
 export class RenderContext {
@@ -46,7 +46,7 @@ class Comms {
   ): void {
     this.host.registerTarget(
       targetName,
-      (commId: string, message: IMessage) => {
+      (commId: string, message: ICommMessage) => {
         const comm = new CommChannel(commId, this.host);
         callback(comm.getWrapper(), message.data, message.buffers);
       }

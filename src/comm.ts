@@ -1,39 +1,11 @@
-import { AsyncListeners } from './async_iterator';
-import { IComm } from './typings';
-
-/** Interface for messages received from comm channels.  */
-export interface IMessage {
-  readonly data: unknown;
-  readonly buffers?: ArrayBuffer[];
-}
-
-export type DisposeCallback = () => void;
-export type CommMessageListener = (message: IMessage) => void;
-export type CommCloseListener = () => void;
-
-export interface ICommHost {
-  addMessageListener(
-    commId: string,
-    handler: CommMessageListener
-  ): DisposeCallback;
-  addCloseListener(commId: string, handler: CommCloseListener): DisposeCallback;
-  sendCommOpen(
-    targetName: string,
-    commId: string,
-    message: IMessage
-  ): Promise<void>;
-  sendCommMessage(commId: string, message: IMessage): Promise<void>;
-  sendCommClose(commId: string): Promise<void>;
-  registerTarget(
-    targetName: string,
-    callback: (commId: string, message: IMessage) => void
-  ): DisposeCallback;
-}
+import { CommCloseListener, CommMessageListener, DisposeCallback, IComm, ICommHost, ICommMessage } from './typings';
 
 export class CommChannel {
-  private readonly listeners = new AsyncListeners<IMessage>();
-  private hasListeners = false;
-  private readonly bufferedMessages: IMessage[] = [];
+  
+  private onMessageCallbacks: Array<CommMessageListener> = [];
+  private onCloseCallbacks: Array<CommCloseListener> = [];
+
+  private readonly bufferedMessages: ICommMessage[] = [];
   private readonly messageDispose: DisposeCallback;
   private readonly closeDispose: DisposeCallback;
 
@@ -44,15 +16,21 @@ export class CommChannel {
     this.messageDispose = this.host.addMessageListener(
       this.commId,
       (message) => {
-        if (this.hasListeners) {
-          this.listeners.push(message);
+        if (this.onMessageCallbacks.length > 0) {
+          // TODO: is this the right condition? What happens if you add a
+          // listener, and then remove it. Do we want to buffer messages in that case?
+          for (const callback of this.onMessageCallbacks) {
+            callback(message);
+          }
         } else {
           this.bufferedMessages.push(message);
         }
       }
     );
     this.closeDispose = this.host.addCloseListener(this.commId, () => {
-      this.listeners.close();
+      for (const callback of this.onCloseCallbacks) {
+        callback();
+      }
       this.dispose();
     });
   }
@@ -84,23 +62,32 @@ export class CommChannel {
     await this.host.sendCommMessage(this.commId, { data, buffers });
   }
 
-  /** Gets all of the messages received on this comm channel. */
-  get messages(): AsyncIterable<IMessage> {
-    const listener = this.listeners.listen();
-    if (!this.hasListeners) {
-      this.listenerAdded();
+
+  private onMessage(callback: CommMessageListener): DisposeCallback {
+    this.onMessageCallbacks.push(callback);
+
+    // Send any buffered messages to the new listener.
+    for (const message of this.bufferedMessages) {
+      callback(message);
     }
-    return listener;
+    this.bufferedMessages.length = 0;
+
+    return () => {
+      const index = this.onMessageCallbacks.indexOf(callback);
+      if (index !== -1) {
+        this.onMessageCallbacks.splice(index, 1);
+      }
+    };
   }
 
-  private listenerAdded(): void {
-    this.hasListeners = true;
-    Promise.resolve().then(() => {
-      for (const message of this.bufferedMessages) {
-        this.listeners.push(message);
+  private onClose(callback: CommCloseListener): DisposeCallback {
+    this.onCloseCallbacks.push(callback);
+    return () => {
+      const index = this.onCloseCallbacks.indexOf(callback);
+      if (index !== -1) {
+        this.onCloseCallbacks.splice(index, 1);
       }
-      this.bufferedMessages.length = 0;
-    });
+    };
   }
 
   private dispose() {
@@ -118,7 +105,10 @@ export class CommChannel {
       })
       .then(() => {
         // This should be done in response to a kernel close message.
-        this.listeners.close();
+        // TODO: am I double calling these callbacks?
+        for (const callback of this.onCloseCallbacks) {
+          callback();
+        }
       });
   }
 
@@ -134,12 +124,16 @@ export class CommChannel {
         return comm.send(data, opts);
       },
       /** @export */
-      close() {
-        comm.close();
+      onMessage(callback: CommMessageListener): DisposeCallback {
+        return comm.onMessage(callback);
       },
       /** @export */
-      get messages(): AsyncIterable<IMessage> {
-        return comm.messages;
+      onClose(callback: CommCloseListener): DisposeCallback {
+        return comm.onClose(callback);
+      },
+      /** @export */
+      close() {
+        comm.close();
       },
     };
   }

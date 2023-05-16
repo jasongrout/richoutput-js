@@ -63,12 +63,18 @@ export declare interface IModelState {
 // tslint:disable-next-line:no-any
 export type JsonType = any;
 
+
 export interface ICommMessage {
   /** The JSON structured data of the message. */
   readonly data: JsonType;
   /** Optional binary buffers transferred with the message. */
   readonly buffers?: ArrayBuffer[];
 }
+
+export type DisposeCallback = () => void;
+export type CommMessageListener = (message: ICommMessage) => void;
+export type CommCloseListener = () => void;
+
 
 export interface IComm {
   /**
@@ -79,14 +85,44 @@ export interface IComm {
    *     receives the comm message.
    */
   send(data: JsonType, opts?: { buffers?: ArrayBuffer[] }): Promise<void>;
+
+  /**
+   * Register a callback to be called when a comm message is received.
+   * @param callback The callback to be called when a comm message is received.
+   * @return A disposable which will unregister the callback.
+   **/
+  onMessage(callback: CommMessageListener): () => void;
+
+  /**
+   * Register a callback to be called when the comm is closed from the kernel.
+   * @param callback The callback to be called when the comm is closed.
+   * @return A disposable which will unregister the callback.
+   **/
+  onClose(callback: () => void): () => void;
+
   /**
    * Closes the comm channel and notifies the kernel that the channel
    * is closed.
    */
-  close(): void;
-  /**
-   * An async iterator of the incoming messages from the kernel.
-   * The iterator will end when the comm channel is closed.
-   */
-  readonly messages: AsyncIterable<ICommMessage>;
+  close(): void; 
+}
+
+
+export interface ICommHost {
+  addMessageListener(
+    commId: string,
+    handler: CommMessageListener
+  ): DisposeCallback;
+  addCloseListener(commId: string, handler: CommCloseListener): DisposeCallback;
+  sendCommOpen(
+    targetName: string,
+    commId: string,
+    message: ICommMessage
+  ): Promise<void>;
+  sendCommMessage(commId: string, message: ICommMessage): Promise<void>;
+  sendCommClose(commId: string): Promise<void>;
+  registerTarget(
+    targetName: string,
+    callback: (commId: string, message: ICommMessage) => void
+  ): DisposeCallback;
 }
