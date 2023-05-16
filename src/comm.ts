@@ -105,7 +105,6 @@ export class CommChannel {
       })
       .then(() => {
         // This should be done in response to a kernel close message.
-        // TODO: am I double calling these callbacks?
         for (const callback of this.onCloseCallbacks) {
           callback();
         }
